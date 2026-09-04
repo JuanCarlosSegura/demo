@@ -1,4 +1,13 @@
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
 app:
+  # API meteorológica para Sevilla (España), sin tokens ni bloqueos cloud
   api:
-    weather-url: "https://api.open-meteo.com/v1/forecast"
-    air-quality-url: "https://air-quality-api.open-meteo.com/v1/air-quality"
+    url: "https://open-meteo.com"
+  kafka:
+    topic: "spain-weather-topic"

@@ -1,44 +1,37 @@
 package com.example.meteo.demo.scheduler;
 
 import com.example.meteo.demo.service.ApiClientService;
+import com.example.meteo.demo.kafka.KafkaProducerService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.util.Map;
 
 @Component
 public class DataPollerScheduler {
 
     private final ApiClientService apiService;
-    private volatile Map<String, String> latestWeather = Map.of();
-    private volatile Map<String, String> latestAirQuality = Map.of();
+    private final KafkaProducerService kafkaProducer;
+    private String latestJsonCache = "{\"status\": \"Esperando primera sincronización...\"}";
 
-    public DataPollerScheduler(ApiClientService apiService) {
+    public DataPollerScheduler(ApiClientService apiService, KafkaProducerService kafkaProducer) {
         this.apiService = apiService;
+        this.kafkaProducer = kafkaProducer;
     }
 
-    // La petición es asíncrona para que una API lenta no bloquee el scheduler.
+    // El programador descarga de la API y publica en Kafka cada 15 segundos
     @Scheduled(fixedRate = 15000)
     public void pollAndPublish() {
         System.out.println("[SCHEDULER] Recuperando actualización de Open-Meteo...");
-        apiService.fetchWeather()
-                .thenAccept(data -> latestWeather = data)
-                .exceptionally(error -> logError("meteorología", error));
-        apiService.fetchAirQuality()
-                .thenAccept(data -> latestAirQuality = data)
-                .exceptionally(error -> logError("calidad del aire", error));
+        String weatherData = apiService.fetchLatestData();
+        
+        if (weatherData != null && !weatherData.contains("error")) {
+            this.latestJsonCache = weatherData;
+            kafkaProducer.sendMessage(weatherData);
+        } else {
+            System.err.println("[ERROR] No se pudo enviar el mensaje a Kafka.");
+        }
     }
 
-    private Void logError(String source, Throwable error) {
-        System.err.println("[ERROR] No se pudo consultar " + source + ": " + error.getMessage());
-        return null;
-    }
-
-    public Map<String, String> getLatestWeather() {
-        return latestWeather;
-    }
-
-    public Map<String, String> getLatestAirQuality() {
-        return latestAirQuality;
+    public String getLatestJsonCache() {
+        return this.latestJsonCache;
     }
 }

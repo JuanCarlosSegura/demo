@@ -19,16 +19,13 @@ public class WeatherViewController {
 
     @GetMapping("/")
     public String index(Model model) {
-        model.addAttribute("initialWeather", scheduler.getLatestWeather());
-        model.addAttribute("initialAirQuality", scheduler.getLatestAirQuality());
+        model.addAttribute("initialData", scheduler.getLatestJsonCache());
         return "index";
     }
 
     @GetMapping("/api/weather/latest")
     @ResponseBody
-    public Map<String, Object> getLatestWeather() {
-        return Map.of(
-                "weather", scheduler.getLatestWeather(),
-                "airQuality", scheduler.getLatestAirQuality());
+    public Map<String, String> getLatestWeather() {
+        return Map.of("json", scheduler.getLatestJsonCache());
     }
 }

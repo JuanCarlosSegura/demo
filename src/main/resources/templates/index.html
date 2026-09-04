@@ -2,8 +2,7 @@
 <html xmlns:th="http://thymeleaf.org" lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard Meteorológico</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <title>Dashboard Clima & Kafka</title>
     <style>
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -18,7 +17,7 @@
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             padding: 30px;
-            max-width: 960px;
+            max-width: 700px;
             width: 100%;
         }
         h1 { color: #1a202c; font-size: 24px; margin-top: 0; }
@@ -49,26 +48,6 @@
             border-radius: 4px;
             font-weight: bold;
         }
-        .charts {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 20px;
-            margin-top: 24px;
-        }
-        .chart-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 16px;
-            min-width: 0;
-        }
-        .chart-card h2 { color: #1a202c; font-size: 17px; margin: 0 0 12px; }
-        .chart-wrap { position: relative; height: 280px; }
-        .error { color: #b91c1c; }
-        @media (max-width: 700px) {
-            body { padding: 16px; }
-            .card { padding: 20px; }
-            .charts { grid-template-columns: 1fr; }
-        }
         pre {
             background-color: #1e293b;
             color: #38bdf8;
@@ -78,94 +57,43 @@
             font-family: 'Consolas', monospace;
             font-size: 13px;
             border: 1px solid #334155;
-            display: none;
         }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>🌤️ Monitor Meteorológico de Andalucía</h1>
-    <p>Previsión y calidad del aire para Sevilla, Isla Cristina y Santa Fe.</p>
+    <h1>🌤️ Monitor Meteorológico (Sevilla) y Kafka</h1>
+    <p>Visualización del payload JSON que se está enviando dinámicamente al broker de mensajería.</p>
     
     <button class="btn" onclick="fetchNewData()">🔄 Actualizar Ahora</button>
 
     <div class="status-bar">
-        <span class="badge">● 3 localidades · Open-Meteo</span>
+        <span class="badge">● Tópico: spain-weather-topic</span>
         <span id="timer-lbl" style="color: #64748b;">Actualizando...</span>
     </div>
 
-    <div class="charts">
-        <section class="chart-card">
-            <h2>Temperatura y precipitación · próximas 48 h</h2>
-            <div class="chart-wrap"><canvas id="weather-chart"></canvas></div>
-        </section>
-        <section class="chart-card">
-            <h2>Calidad del aire · próximas 48 h</h2>
-            <div class="chart-wrap"><canvas id="air-chart"></canvas></div>
-        </section>
-    </div>
-    <p id="error-lbl" class="error"></p>
+    <pre id="json-box" th:text="${initialData}">{}</pre>
 </div>
 
 <script th:inline="javascript">
-    let weatherChart;
-    let airChart;
-
-    function labels(times) {
-        return times.map(time => new Date(time).toLocaleString('es-ES', {
-            weekday: 'short', hour: '2-digit', minute: '2-digit'
-        }));
-    }
-
-    const colors = ['#e05252', '#2583c7', '#d47b32'];
-
-    function cityDatasets(cities, field, labelsText) {
-        return Object.entries(cities).map(([city, json], index) => {
-            const data = JSON.parse(json);
-            return { label: city, data: data.hourly[field], borderColor: colors[index],
-                backgroundColor: colors[index] + '20', tension: .3, fill: field === 'temperature_2m' };
-        });
-    }
-
-    function drawCharts(weather, air) {
-        const weatherData = JSON.parse(Object.values(weather)[0]);
-        const airData = JSON.parse(Object.values(air)[0]);
-        const weatherLabels = labels(weatherData.hourly.time);
-        const airLabels = labels(airData.hourly.time);
-        weatherChart?.destroy();
-        airChart?.destroy();
-        weatherChart = new Chart(document.getElementById('weather-chart'), {
-            type: 'line',
-            data: { labels: weatherLabels, datasets: cityDatasets(weather, 'temperature_2m') },
-            options: { responsive: true, maintainAspectRatio: false, scales: {
-                y: { title: { display: true, text: '°C' } }
-            }}
-        });
-        airChart = new Chart(document.getElementById('air-chart'), {
-            type: 'line',
-            data: { labels: airLabels, datasets: cityDatasets(air, 'pm2_5') },
-            options: { responsive: true, maintainAspectRatio: false }
-        });
-    }
-
     function fetchNewData() {
         fetch('/api/weather/latest')
             .then(res => res.json())
             .then(data => {
-                if (!Object.keys(data.weather).length || !Object.keys(data.airQuality).length) {
-                    throw new Error('Esperando datos de las tres localidades');
-                }
-                drawCharts(data.weather, data.airQuality);
-                document.getElementById('error-lbl').textContent = '';
+                const prettyJson = JSON.stringify(JSON.parse(data.json), null, 2);
+                document.getElementById('json-box').textContent = prettyJson;
                 document.getElementById('timer-lbl').textContent = "Último refresco web: " + new Date().toLocaleTimeString();
             })
-            .catch(err => document.getElementById('error-lbl').textContent = 'No se pudieron cargar las gráficas: ' + err.message);
+            .catch(err => console.error("Error obteniendo caché:", err));
     }
 
     document.addEventListener("DOMContentLoaded", () => {
+        try {
+            const el = document.getElementById('json-box');
+            el.textContent = JSON.stringify(JSON.parse(el.textContent), null, 2);
+        } catch(e){}
         document.getElementById('timer-lbl').textContent = "Último refresco web: " + new Date().toLocaleTimeString();
-        fetchNewData();
     });
 
     // Evento recurrente cada 30 segundos (30000ms)
